@@ -1,6 +1,7 @@
 package hybridsort
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"testing"
@@ -119,8 +120,6 @@ var sizes = []struct {
 	name string
 	n    int
 }{
-	{"1", 1},
-	{"10", 10},
 	{"100", 100},
 	{"1K", 1_000},
 	{"10K", 10_000},
@@ -177,6 +176,26 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// makeSortedWithTail creates 90% sorted ascending, then 10% random values appended.
+func makeSortedWithTail(n int, seed int64) []int {
+	if n < 2 {
+		return makeSorted(n)
+	}
+	data := make([]int, n)
+	split := n * 9 / 10
+	if split < 1 {
+		split = 1
+	}
+	for i := 0; i < split; i++ {
+		data[i] = i
+	}
+	rng := rand.New(rand.NewSource(seed))
+	for i := split; i < n; i++ {
+		data[i] = rng.Intn(n)
+	}
+	return data
 }
 
 func makeReversed(n int) []int {
@@ -299,11 +318,69 @@ func BenchmarkStdlibSort_TwoBlocks(b *testing.B) {
 	}
 }
 
+// 90% sorted + 10% random tail benchmarks
+
+func BenchmarkHybridSort_SortedTail(b *testing.B) {
+	for _, sz := range sizes {
+		src := makeSortedWithTail(sz.n, 42)
+		b.Run(sz.name, func(b *testing.B) {
+			buf := make([]int, sz.n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				HybridSort(buf, intLess)
+			}
+		})
+	}
+}
+
+func BenchmarkStdlibSort_SortedTail(b *testing.B) {
+	for _, sz := range sizes {
+		src := makeSortedWithTail(sz.n, 42)
+		b.Run(sz.name, func(b *testing.B) {
+			buf := make([]int, sz.n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				sort.Sort(intSlice(buf))
+			}
+		})
+	}
+}
+
 func BenchmarkStdlibSort_Reversed(b *testing.B) {
 	for _, sz := range sizes {
 		src := makeReversed(sz.n)
 		b.Run(sz.name, func(b *testing.B) {
 			buf := make([]int, sz.n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				sort.Sort(intSlice(buf))
+			}
+		})
+	}
+}
+
+// Per-element benchmarks for n=1..10
+
+func BenchmarkHybridSort_Tiny(b *testing.B) {
+	for n := 1; n <= 10; n++ {
+		src := makeRandom(n, int64(n))
+		name := fmt.Sprintf("n=%d", n)
+		b.Run(name, func(b *testing.B) {
+			buf := make([]int, n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				HybridSort(buf, intLess)
+			}
+		})
+	}
+}
+
+func BenchmarkStdlibSort_Tiny(b *testing.B) {
+	for n := 1; n <= 10; n++ {
+		src := makeRandom(n, int64(n))
+		name := fmt.Sprintf("n=%d", n)
+		b.Run(name, func(b *testing.B) {
+			buf := make([]int, n)
 			for i := 0; i < b.N; i++ {
 				copy(buf, src)
 				sort.Sort(intSlice(buf))

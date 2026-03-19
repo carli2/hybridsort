@@ -34,6 +34,11 @@ func HybridSort[T any](data []T, less func(a, b T) bool) {
 	if n < 2 {
 		return
 	}
+	// Fast path for small slices: insertion sort, zero allocations.
+	if n <= 16 {
+		insertionSortRange(data, 0, n-1, less)
+		return
+	}
 
 	const minMonotone = 8
 
