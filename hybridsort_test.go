@@ -332,6 +332,16 @@ func makeSortedWithTail(n int, seed int64) []int {
 	return data
 }
 
+// makeFewDistinct creates n elements with only k distinct values, randomly distributed.
+func makeFewDistinct(n, k int, seed int64) []int {
+	rng := rand.New(rand.NewSource(seed))
+	data := make([]int, n)
+	for i := range data {
+		data[i] = rng.Intn(k)
+	}
+	return data
+}
+
 func makeReversed(n int) []int {
 	data := make([]int, n)
 	for i := range data {
@@ -485,6 +495,70 @@ func BenchmarkStdlibSort_Reversed(b *testing.B) {
 		src := makeReversed(sz.n)
 		b.Run(sz.name, func(b *testing.B) {
 			buf := make([]int, sz.n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				sort.Sort(intSlice(buf))
+			}
+		})
+	}
+}
+
+// Few distinct values at 10K — the memcp index-build case
+
+var distinctCounts = []struct {
+	name string
+	k    int
+}{
+	{"2vals", 2},
+	{"5vals", 5},
+	{"10vals", 10},
+	{"100vals", 100},
+}
+
+func BenchmarkSlice_FewDistinct(b *testing.B) {
+	for _, d := range distinctCounts {
+		src := makeFewDistinct(10_000, d.k, 42)
+		b.Run(d.name, func(b *testing.B) {
+			buf := make([]int, 10_000)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				Slice(buf, func(i, j int) bool { return buf[i] < buf[j] })
+			}
+		})
+	}
+}
+
+func BenchmarkStdlibSlice_FewDistinct(b *testing.B) {
+	for _, d := range distinctCounts {
+		src := makeFewDistinct(10_000, d.k, 42)
+		b.Run(d.name, func(b *testing.B) {
+			buf := make([]int, 10_000)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				sort.Slice(buf, func(i, j int) bool { return buf[i] < buf[j] })
+			}
+		})
+	}
+}
+
+func BenchmarkHybridSort_FewDistinct(b *testing.B) {
+	for _, d := range distinctCounts {
+		src := makeFewDistinct(10_000, d.k, 42)
+		b.Run(d.name, func(b *testing.B) {
+			buf := make([]int, 10_000)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				HybridSort(buf, intLess)
+			}
+		})
+	}
+}
+
+func BenchmarkStdlibSort_FewDistinct(b *testing.B) {
+	for _, d := range distinctCounts {
+		src := makeFewDistinct(10_000, d.k, 42)
+		b.Run(d.name, func(b *testing.B) {
+			buf := make([]int, 10_000)
 			for i := 0; i < b.N; i++ {
 				copy(buf, src)
 				sort.Sort(intSlice(buf))
