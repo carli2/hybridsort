@@ -306,6 +306,96 @@ func insertionSortRange[T any](data []T, lo, hi int, less func(a, b T) bool) {
 	}
 }
 
+// -----------------------------------------------
+// Slice — sort.Slice-compatible, index-based less
+// -----------------------------------------------
+
+// Slice sorts data using an index-based comparison function,
+// matching sort.Slice's signature. Uses quicksort with median-of-3
+// pivot and insertion sort for small partitions.
+//
+// The hybrid merge path is not available here because buffered merging
+// requires value-based comparison. For maximum performance on partially
+// sorted data, use HybridSort with a value-based less function instead.
+func Slice[T any](data []T, less func(i, j int) bool) {
+	n := len(data)
+	if n < 2 {
+		return
+	}
+	if n <= 16 {
+		insertionSortIdx(data, 0, n-1, less)
+		return
+	}
+	qsortIdx(data, 0, n-1, less)
+}
+
+func qsortIdx[T any](data []T, lo, hi int, less func(i, j int) bool) {
+	for lo < hi {
+		if hi-lo <= 16 {
+			insertionSortIdx(data, lo, hi, less)
+			return
+		}
+
+		p := partitionIdx(data, lo, hi, less)
+
+		if p-lo < hi-p {
+			qsortIdx(data, lo, p-1, less)
+			lo = p + 1
+		} else {
+			qsortIdx(data, p+1, hi, less)
+			hi = p - 1
+		}
+	}
+}
+
+func partitionIdx[T any](data []T, lo, hi int, less func(i, j int) bool) int {
+	mid := lo + (hi-lo)/2
+	pivotIdx := medianOf3Idx(lo, mid, hi, less)
+	data[pivotIdx], data[hi] = data[hi], data[pivotIdx]
+
+	i := lo
+	for j := lo; j < hi; j++ {
+		if less(j, hi) {
+			data[i], data[j] = data[j], data[i]
+			i++
+		}
+	}
+	data[i], data[hi] = data[hi], data[i]
+	return i
+}
+
+func medianOf3Idx(a, b, c int, less func(i, j int) bool) int {
+	ab := less(a, b)
+	ac := less(a, c)
+	bc := less(b, c)
+
+	if ab {
+		if bc {
+			return b
+		}
+		if ac {
+			return c
+		}
+		return a
+	}
+
+	if !bc {
+		return b
+	}
+	if !ac {
+		return c
+	}
+	return a
+}
+
+func insertionSortIdx[T any](data []T, lo, hi int, less func(i, j int) bool) {
+	for i := lo + 1; i <= hi; i++ {
+		for j := i; j > lo && less(j, j-1); j-- {
+			data[j], data[j-1] = data[j-1], data[j]
+		}
+	}
+}
+
 // ------------------------------------
 // Buffered merge
 // ------------------------------------

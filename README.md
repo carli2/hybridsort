@@ -5,9 +5,19 @@ A generic hybrid sorting algorithm for Go that exploits natural order in data.
 ```go
 import "github.com/carli2/hybridsort"
 
+// Value-based: full hybrid sort with run detection + buffered merge
 data := []int{5, 3, 1, 4, 2}
 hybridsort.HybridSort(data, func(a, b int) bool { return a < b })
+
+// Index-based: drop-in replacement for sort.Slice
+hybridsort.Slice(data, func(i, j int) bool { return data[i] < data[j] })
 ```
+
+## API
+
+- **`HybridSort[T any](data []T, less func(a, b T) bool)`** — full hybrid sort with natural run detection and buffered merge. Fastest on partially sorted data.
+- **`Slice[T any](data []T, less func(i, j int) bool)`** — drop-in replacement for `sort.Slice`. Uses quicksort with insertion sort for small partitions. Zero allocations.
+- **`QuickSort[T any](data []T, less func(a, b T) bool)`** — standalone generic quicksort with median-of-3 pivot and insertion sort fallback.
 
 ## How it works
 
@@ -18,16 +28,13 @@ HybridSort scans the input for **natural runs** — ascending, descending, and u
 3. **Merge** blocks pairwise using a buffered O(n) merge with an n/2 auxiliary buffer
 4. **Fast path** for n ≤ 16: direct insertion sort, zero heap allocations
 
-Also exported: `QuickSort` — a standalone generic quicksort with median-of-3 pivot selection and insertion sort fallback for small partitions.
-
 ## Benchmarks
 
 All benchmarks measured on AMD Ryzen 9 7900X3D, Go 1.22, linux/amd64.
-Compared against `sort.Sort` from the standard library.
 
-### Tiny inputs (n = 1–10)
+### HybridSort vs sort.Sort — tiny inputs (n = 1–10)
 
-HybridSort uses insertion sort for n ≤ 16, avoiding all heap allocations.
+Insertion sort fast path, zero heap allocations.
 
 | n | HybridSort | sort.Sort | Speedup |
 |---|----------:|----------:|--------:|
@@ -42,7 +49,7 @@ HybridSort uses insertion sort for n ≤ 16, avoiding all heap allocations.
 | 9 | 37 ns | 83 ns | **2.2x** |
 | 10 | 66 ns | 140 ns | **2.1x** |
 
-### Random data
+### HybridSort vs sort.Sort — random data
 
 | Size | HybridSort | QuickSort | sort.Sort |
 |------|----------:|----------:|----------:|
@@ -53,7 +60,7 @@ HybridSort uses insertion sort for n ≤ 16, avoiding all heap allocations.
 
 On fully random data, HybridSort is faster than `sort.Sort` at all sizes. The standalone `QuickSort` is fastest here since it has zero overhead from run detection.
 
-### Sorted data (best case)
+### HybridSort vs sort.Sort — sorted data (best case)
 
 Data is already in ascending order — HybridSort detects a single run and returns.
 
@@ -66,7 +73,7 @@ Data is already in ascending order — HybridSort detects a single run and retur
 
 Both algorithms handle sorted data in O(n). Performance is nearly identical, with HybridSort pulling slightly ahead at larger sizes.
 
-### Reversed data
+### HybridSort vs sort.Sort — reversed data
 
 Data is in descending order — HybridSort detects one descending run and reverses it.
 
@@ -77,7 +84,7 @@ Data is in descending order — HybridSort detects one descending run and revers
 | 10K | 19.2 µs | 24.7 µs | **1.29x** |
 | 100K | 213 µs | 256 µs | **1.20x** |
 
-### Two presorted blocks (90% + 10%, interleaved values)
+### HybridSort vs sort.Sort — two presorted blocks (90% + 10%)
 
 Two ascending runs whose values interleave, requiring a real merge.
 This is where HybridSort's run detection + buffered merge shines.
@@ -89,7 +96,7 @@ This is where HybridSort's run detection + buffered merge shines.
 | 10K | 38.8 µs | 744 µs | **19x** |
 | 100K | 399 µs | 8.8 ms | **22x** |
 
-### Sorted + random tail (90% sorted, 10% random appended)
+### HybridSort vs sort.Sort — sorted + random tail (90%/10%)
 
 Common real-world pattern: mostly sorted data with fresh unsorted elements appended.
 
@@ -100,11 +107,38 @@ Common real-world pattern: mostly sorted data with fresh unsorted elements appen
 | 10K | 59.1 µs | 571 µs | **9.7x** |
 | 100K | 1.58 ms | 7.16 ms | **4.5x** |
 
+### Slice vs sort.Slice — random data
+
+`Slice` is a drop-in replacement for `sort.Slice` with the same `less(i, j int)` signature.
+
+| Size | Slice | sort.Slice | Speedup |
+|------|------:|-----------:|--------:|
+| 100 | 1,400 ns | 1,499 ns | **1.07x** |
+| 1K | 20,220 ns | 22,320 ns | **1.10x** |
+| 10K | 560 µs | 597 µs | **1.07x** |
+| 100K | 7.35 ms | 7.73 ms | **1.05x** |
+
+### Slice vs sort.Slice — tiny inputs (n = 1–10)
+
+| n | Slice | sort.Slice | Speedup |
+|---|------:|-----------:|--------:|
+| 1 | 2.8 ns | 35 ns | **12x** |
+| 2 | 5.4 ns | 60 ns | **11x** |
+| 3 | 9.9 ns | 70 ns | **7x** |
+| 4 | 14 ns | 73 ns | **5x** |
+| 5 | 16 ns | 76 ns | **5x** |
+| 6 | 23 ns | 88 ns | **3.8x** |
+| 7 | 24 ns | 88 ns | **3.7x** |
+| 8 | 40 ns | 118 ns | **3.0x** |
+| 9 | 38 ns | 112 ns | **2.9x** |
+| 10 | 72 ns | 162 ns | **2.3x** |
+
 ## Design trade-offs
 
-- **Memory**: HybridSort allocates an n/2 buffer for the merge phase. For n ≤ 16, zero allocations. `sort.Sort` uses O(1) extra memory but pays for it with slower merging.
+- **Memory**: HybridSort allocates an n/2 buffer for the merge phase. For n ≤ 16 and for Slice, zero allocations. `sort.Sort` uses O(1) extra memory but pays for it with slower merging.
 - **Stability**: HybridSort is **not** stable (quicksort is used for unordered blocks).
-- **Generics**: Uses Go generics (`[T any]` + `less` function) — no interface boxing overhead, unlike `sort.Sort` which requires the `sort.Interface` indirection.
+- **Generics**: Uses Go generics — no interface boxing overhead, unlike `sort.Sort`/`sort.Slice` which require indirection through `sort.Interface` or `reflect.Swapper`.
+- **Slice vs HybridSort**: `Slice` uses pure quicksort because the buffered merge requires value-based comparison, which is incompatible with the index-based `less(i, j int)` signature. For maximum performance on partially sorted data, prefer `HybridSort`.
 
 ## Install
 

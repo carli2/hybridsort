@@ -97,6 +97,27 @@ func TestQuickSort_Random(t *testing.T) {
 	assertSorted(t, data)
 }
 
+func TestSlice_Random(t *testing.T) {
+	rng := rand.New(rand.NewSource(555))
+	data := make([]int, 10000)
+	for i := range data {
+		data[i] = rng.Intn(100000)
+	}
+	Slice(data, func(i, j int) bool { return data[i] < data[j] })
+	assertSorted(t, data)
+}
+
+func TestSlice_Small(t *testing.T) {
+	for n := 0; n <= 20; n++ {
+		data := make([]int, n)
+		for i := range data {
+			data[i] = n - i
+		}
+		Slice(data, func(i, j int) bool { return data[i] < data[j] })
+		assertSorted(t, data)
+	}
+}
+
 func assertSorted(t *testing.T, data []int) {
 	t.Helper()
 	for i := 1; i < len(data); i++ {
@@ -354,6 +375,62 @@ func BenchmarkStdlibSort_Reversed(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				copy(buf, src)
 				sort.Sort(intSlice(buf))
+			}
+		})
+	}
+}
+
+// Slice vs sort.Slice benchmarks
+
+func BenchmarkSlice_Random(b *testing.B) {
+	for _, sz := range sizes {
+		src := makeRandom(sz.n, 42)
+		b.Run(sz.name, func(b *testing.B) {
+			buf := make([]int, sz.n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				Slice(buf, func(i, j int) bool { return buf[i] < buf[j] })
+			}
+		})
+	}
+}
+
+func BenchmarkStdlibSlice_Random(b *testing.B) {
+	for _, sz := range sizes {
+		src := makeRandom(sz.n, 42)
+		b.Run(sz.name, func(b *testing.B) {
+			buf := make([]int, sz.n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				sort.Slice(buf, func(i, j int) bool { return buf[i] < buf[j] })
+			}
+		})
+	}
+}
+
+func BenchmarkSlice_Tiny(b *testing.B) {
+	for n := 1; n <= 10; n++ {
+		src := makeRandom(n, int64(n))
+		name := fmt.Sprintf("n=%d", n)
+		b.Run(name, func(b *testing.B) {
+			buf := make([]int, n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				Slice(buf, func(i, j int) bool { return buf[i] < buf[j] })
+			}
+		})
+	}
+}
+
+func BenchmarkStdlibSlice_Tiny(b *testing.B) {
+	for n := 1; n <= 10; n++ {
+		src := makeRandom(n, int64(n))
+		name := fmt.Sprintf("n=%d", n)
+		b.Run(name, func(b *testing.B) {
+			buf := make([]int, n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				sort.Slice(buf, func(i, j int) bool { return buf[i] < buf[j] })
 			}
 		})
 	}
