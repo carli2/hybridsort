@@ -240,25 +240,53 @@ func qsort[T any](data []T, lo, hi int, less func(a, b T) bool) {
 			return
 		}
 
-		lt, gt := partition3(data, lo, hi, less)
+		p := partition(data, lo, hi, less)
 
-		// Recurse into smaller side first to bound stack depth.
-		if lt-lo < hi-gt {
-			qsort(data, lo, lt-1, less)
-			lo = gt + 1
+		// Detect bad partition (pivot near one end → likely many duplicates).
+		// Fall back to 3-way partitioning to collect equal elements.
+		n := hi - lo + 1
+		if p-lo < n/8 || hi-p < n/8 {
+			lt, gt := partition3(data, lo, hi, less)
+			if lt-lo < hi-gt {
+				qsort(data, lo, lt-1, less)
+				lo = gt + 1
+			} else {
+				qsort(data, gt+1, hi, less)
+				hi = lt - 1
+			}
+			continue
+		}
+
+		// Good partition — standard 2-way recurse.
+		if p-lo < hi-p {
+			qsort(data, lo, p-1, less)
+			lo = p + 1
 		} else {
-			qsort(data, gt+1, hi, less)
-			hi = lt - 1
+			qsort(data, p+1, hi, less)
+			hi = p - 1
 		}
 	}
 }
 
+func partition[T any](data []T, lo, hi int, less func(a, b T) bool) int {
+	mid := lo + (hi-lo)/2
+	pivotIdx := medianOf3(data, lo, mid, hi, less)
+	data[pivotIdx], data[hi] = data[hi], data[pivotIdx]
+	pivot := data[hi]
+
+	i := lo
+	for j := lo; j < hi; j++ {
+		if less(data[j], pivot) {
+			data[i], data[j] = data[j], data[i]
+			i++
+		}
+	}
+	data[i], data[hi] = data[hi], data[i]
+	return i
+}
+
 // partition3 performs 3-way (Dutch National Flag) partitioning.
-// Returns lt, gt such that:
-//
-//	data[lo..lt-1]  < pivot
-//	data[lt..gt]   == pivot
-//	data[gt+1..hi]  > pivot
+// Only used as fallback when 2-way produces a badly skewed partition.
 func partition3[T any](data []T, lo, hi int, less func(a, b T) bool) (int, int) {
 	mid := lo + (hi-lo)/2
 	pivotIdx := medianOf3(data, lo, mid, hi, less)
@@ -346,21 +374,50 @@ func qsortIdx[T any](data []T, lo, hi int, less func(i, j int) bool) {
 			return
 		}
 
-		lt, gt := partition3Idx(data, lo, hi, less)
+		p := partitionIdx(data, lo, hi, less)
 
-		if lt-lo < hi-gt {
-			qsortIdx(data, lo, lt-1, less)
-			lo = gt + 1
+		// Detect bad partition → fall back to 3-way to collect equal elements.
+		n := hi - lo + 1
+		if p-lo < n/8 || hi-p < n/8 {
+			lt, gt := partition3Idx(data, lo, hi, less)
+			if lt-lo < hi-gt {
+				qsortIdx(data, lo, lt-1, less)
+				lo = gt + 1
+			} else {
+				qsortIdx(data, gt+1, hi, less)
+				hi = lt - 1
+			}
+			continue
+		}
+
+		if p-lo < hi-p {
+			qsortIdx(data, lo, p-1, less)
+			lo = p + 1
 		} else {
-			qsortIdx(data, gt+1, hi, less)
-			hi = lt - 1
+			qsortIdx(data, p+1, hi, less)
+			hi = p - 1
 		}
 	}
 }
 
+func partitionIdx[T any](data []T, lo, hi int, less func(i, j int) bool) int {
+	mid := lo + (hi-lo)/2
+	pivotIdx := medianOf3Idx(lo, mid, hi, less)
+	data[pivotIdx], data[hi] = data[hi], data[pivotIdx]
+
+	i := lo
+	for j := lo; j < hi; j++ {
+		if less(j, hi) {
+			data[i], data[j] = data[j], data[i]
+			i++
+		}
+	}
+	data[i], data[hi] = data[hi], data[i]
+	return i
+}
+
 // partition3Idx performs 3-way partitioning with index-based less.
-// The pivot is stored at data[hi] throughout and never moved during the loop,
-// so less(i, hi) and less(hi, i) always compare against the pivot value.
+// Only used as fallback when 2-way produces a badly skewed partition.
 func partition3Idx[T any](data []T, lo, hi int, less func(i, j int) bool) (int, int) {
 	mid := lo + (hi-lo)/2
 	pivotPos := medianOf3Idx(lo, mid, hi, less)
@@ -368,18 +425,17 @@ func partition3Idx[T any](data []T, lo, hi int, less func(i, j int) bool) (int, 
 
 	lt, i, gt := lo, lo, hi-1
 	for i <= gt {
-		if less(i, hi) { // data[i] < pivot
+		if less(i, hi) {
 			data[lt], data[i] = data[i], data[lt]
 			lt++
 			i++
-		} else if less(hi, i) { // data[i] > pivot
+		} else if less(hi, i) {
 			data[i], data[gt] = data[gt], data[i]
 			gt--
-		} else { // equal
+		} else {
 			i++
 		}
 	}
-	// Move pivot from hi into the equal range
 	data[gt+1], data[hi] = data[hi], data[gt+1]
 	return lt, gt + 1
 }
