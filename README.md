@@ -114,13 +114,26 @@ Common real-world pattern: mostly sorted data with fresh unsorted elements appen
 ### Slice vs sort.Slice — random data
 
 `Slice` is a drop-in replacement for `sort.Slice` with the same `less(i, j int)` signature.
+Uses Lomuto partition with post-partition equal-element collection to handle duplicates in O(n).
 
 | Size | Slice | sort.Slice | Speedup |
 |------|------:|-----------:|--------:|
-| 100 | 1,400 ns | 1,499 ns | **1.07x** |
-| 1K | 20,220 ns | 22,320 ns | **1.10x** |
-| 10K | 560 µs | 597 µs | **1.07x** |
-| 100K | 7.35 ms | 7.73 ms | **1.05x** |
+| 100 | 1,583 ns | 1,570 ns | 1.0x |
+| 1K | 26,065 ns | 23,536 ns | 0.9x |
+| 10K | 679 µs | 621 µs | 0.9x |
+| 100K | 8.84 ms | 7.99 ms | 0.9x |
+
+### Slice vs sort.Slice — few distinct values (10K elements)
+
+Simulates the memcp index-build case: many rows, few unique column values.
+Equal-element collection after Lomuto partition excludes duplicates from recursion.
+
+| Distinct | Slice | sort.Slice | Speedup |
+|----------|------:|-----------:|--------:|
+| 2 | 43 µs | 44 µs | **1.02x** |
+| 5 | 66 µs | 71 µs | **1.08x** |
+| 10 | 82 µs | 86 µs | **1.04x** |
+| 100 | 284 µs | 283 µs | 1.0x |
 
 ### Slice vs sort.Slice — tiny inputs (n = 1–10)
 
@@ -159,7 +172,8 @@ Stable insertion sort, zero allocations. Ideal for small slices where stability 
 - **Memory**: HybridSort allocates an n/2 buffer for the merge phase. For n ≤ 16 and for Slice, zero allocations. `sort.Sort` uses O(1) extra memory but pays for it with slower merging.
 - **Stability**: HybridSort is **not** stable (quicksort is used for unordered blocks).
 - **Generics**: Uses Go generics — no interface boxing overhead, unlike `sort.Sort`/`sort.Slice` which require indirection through `sort.Interface` or `reflect.Swapper`.
-- **Slice vs HybridSort**: `Slice` uses pure quicksort because the buffered merge requires value-based comparison, which is incompatible with the index-based `less(i, j int)` signature. For maximum performance on partially sorted data, prefer `HybridSort`.
+- **Slice vs HybridSort**: `Slice` uses quicksort with post-partition equal-element collection because the buffered merge requires value-based comparison, which is incompatible with the index-based `less(i, j int)` signature. For maximum performance on partially sorted data, prefer `HybridSort`.
+- **Duplicate handling**: `Slice` and `QuickSort` use Lomuto partition followed by a linear scan that collects elements equal to the pivot. This prevents O(n²) degeneration on duplicate-heavy input (e.g. 99% identical values) without adding overhead to the random-data fast path.
 
 ## Install
 
