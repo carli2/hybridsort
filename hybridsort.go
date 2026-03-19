@@ -396,6 +396,22 @@ func insertionSortIdx[T any](data []T, lo, hi int, less func(i, j int) bool) {
 	}
 }
 
+// -----------------------------------------------
+// SliceStable — stable sort for small slices
+// -----------------------------------------------
+
+// SliceStable sorts data using a stable insertion sort with an index-based
+// comparison function, matching sort.SliceStable's signature.
+// Optimal for small slices (n < ~50). For larger slices, O(n²) cost dominates.
+// Zero allocations.
+func SliceStable[T any](data []T, less func(i, j int) bool) {
+	n := len(data)
+	if n < 2 {
+		return
+	}
+	insertionSortIdx(data, 0, n-1, less)
+}
+
 // ------------------------------------
 // Buffered merge
 // ------------------------------------

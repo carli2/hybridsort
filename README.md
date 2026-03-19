@@ -11,12 +11,16 @@ hybridsort.HybridSort(data, func(a, b int) bool { return a < b })
 
 // Index-based: drop-in replacement for sort.Slice
 hybridsort.Slice(data, func(i, j int) bool { return data[i] < data[j] })
+
+// Stable sort for small slices: drop-in replacement for sort.SliceStable
+hybridsort.SliceStable(data, func(i, j int) bool { return data[i] < data[j] })
 ```
 
 ## API
 
 - **`HybridSort[T any](data []T, less func(a, b T) bool)`** — full hybrid sort with natural run detection and buffered merge. Fastest on partially sorted data.
 - **`Slice[T any](data []T, less func(i, j int) bool)`** — drop-in replacement for `sort.Slice`. Uses quicksort with insertion sort for small partitions. Zero allocations.
+- **`SliceStable[T any](data []T, less func(i, j int) bool)`** — stable insertion sort, drop-in replacement for `sort.SliceStable`. Optimal for small slices (n < ~50). Zero allocations.
 - **`QuickSort[T any](data []T, less func(a, b T) bool)`** — standalone generic quicksort with median-of-3 pivot and insertion sort fallback.
 
 ## How it works
@@ -132,6 +136,23 @@ Common real-world pattern: mostly sorted data with fresh unsorted elements appen
 | 8 | 40 ns | 118 ns | **3.0x** |
 | 9 | 38 ns | 112 ns | **2.9x** |
 | 10 | 72 ns | 162 ns | **2.3x** |
+
+### SliceStable vs sort.SliceStable — tiny inputs (n = 1–10)
+
+Stable insertion sort, zero allocations. Ideal for small slices where stability matters.
+
+| n | SliceStable | sort.SliceStable | Speedup |
+|---|----------:|----------:|--------:|
+| 1 | 1.8 ns | 36 ns | **20x** |
+| 2 | 5.0 ns | 72 ns | **14x** |
+| 3 | 9.4 ns | 78 ns | **8.3x** |
+| 4 | 14 ns | 85 ns | **6x** |
+| 5 | 16 ns | 82 ns | **5.2x** |
+| 6 | 24 ns | 97 ns | **4.1x** |
+| 7 | 24 ns | 99 ns | **4.1x** |
+| 8 | 40 ns | 127 ns | **3.2x** |
+| 9 | 39 ns | 129 ns | **3.3x** |
+| 10 | 71 ns | 184 ns | **2.6x** |
 
 ## Design trade-offs
 

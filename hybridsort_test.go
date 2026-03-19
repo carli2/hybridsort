@@ -118,6 +118,24 @@ func TestSlice_Small(t *testing.T) {
 	}
 }
 
+func TestSliceStable_Stability(t *testing.T) {
+	type item struct {
+		key, order int
+	}
+	data := []item{
+		{3, 0}, {1, 1}, {2, 2}, {1, 3}, {3, 4}, {2, 5},
+	}
+	SliceStable(data, func(i, j int) bool { return data[i].key < data[j].key })
+	for i := 1; i < len(data); i++ {
+		if data[i].key < data[i-1].key {
+			t.Fatalf("not sorted at %d", i)
+		}
+		if data[i].key == data[i-1].key && data[i].order < data[i-1].order {
+			t.Fatalf("not stable at %d: order %d before %d", i, data[i-1].order, data[i].order)
+		}
+	}
+}
+
 func assertSorted(t *testing.T, data []int) {
 	t.Helper()
 	for i := 1; i < len(data); i++ {
@@ -431,6 +449,36 @@ func BenchmarkStdlibSlice_Tiny(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				copy(buf, src)
 				sort.Slice(buf, func(i, j int) bool { return buf[i] < buf[j] })
+			}
+		})
+	}
+}
+
+// SliceStable vs sort.SliceStable benchmarks
+
+func BenchmarkSliceStable_Tiny(b *testing.B) {
+	for n := 1; n <= 10; n++ {
+		src := makeRandom(n, int64(n))
+		name := fmt.Sprintf("n=%d", n)
+		b.Run(name, func(b *testing.B) {
+			buf := make([]int, n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				SliceStable(buf, func(i, j int) bool { return buf[i] < buf[j] })
+			}
+		})
+	}
+}
+
+func BenchmarkStdlibSliceStable_Tiny(b *testing.B) {
+	for n := 1; n <= 10; n++ {
+		src := makeRandom(n, int64(n))
+		name := fmt.Sprintf("n=%d", n)
+		b.Run(name, func(b *testing.B) {
+			buf := make([]int, n)
+			for i := 0; i < b.N; i++ {
+				copy(buf, src)
+				sort.SliceStable(buf, func(i, j int) bool { return buf[i] < buf[j] })
 			}
 		})
 	}
