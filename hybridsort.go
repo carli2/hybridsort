@@ -240,34 +240,44 @@ func qsort[T any](data []T, lo, hi int, less func(a, b T) bool) {
 			return
 		}
 
-		p := partition(data, lo, hi, less)
+		lt, gt := partition3(data, lo, hi, less)
 
 		// Recurse into smaller side first to bound stack depth.
-		if p-lo < hi-p {
-			qsort(data, lo, p-1, less)
-			lo = p + 1
+		if lt-lo < hi-gt {
+			qsort(data, lo, lt-1, less)
+			lo = gt + 1
 		} else {
-			qsort(data, p+1, hi, less)
-			hi = p - 1
+			qsort(data, gt+1, hi, less)
+			hi = lt - 1
 		}
 	}
 }
 
-func partition[T any](data []T, lo, hi int, less func(a, b T) bool) int {
+// partition3 performs 3-way (Dutch National Flag) partitioning.
+// Returns lt, gt such that:
+//
+//	data[lo..lt-1]  < pivot
+//	data[lt..gt]   == pivot
+//	data[gt+1..hi]  > pivot
+func partition3[T any](data []T, lo, hi int, less func(a, b T) bool) (int, int) {
 	mid := lo + (hi-lo)/2
 	pivotIdx := medianOf3(data, lo, mid, hi, less)
-	data[pivotIdx], data[hi] = data[hi], data[pivotIdx]
-	pivot := data[hi]
+	pivot := data[pivotIdx]
 
-	i := lo
-	for j := lo; j < hi; j++ {
-		if less(data[j], pivot) {
-			data[i], data[j] = data[j], data[i]
+	lt, i, gt := lo, lo, hi
+	for i <= gt {
+		if less(data[i], pivot) {
+			data[lt], data[i] = data[i], data[lt]
+			lt++
+			i++
+		} else if less(pivot, data[i]) {
+			data[i], data[gt] = data[gt], data[i]
+			gt--
+		} else {
 			i++
 		}
 	}
-	data[i], data[hi] = data[hi], data[i]
-	return i
+	return lt, gt
 }
 
 func medianOf3[T any](data []T, a, b, c int, less func(a, b T) bool) int {
@@ -336,32 +346,42 @@ func qsortIdx[T any](data []T, lo, hi int, less func(i, j int) bool) {
 			return
 		}
 
-		p := partitionIdx(data, lo, hi, less)
+		lt, gt := partition3Idx(data, lo, hi, less)
 
-		if p-lo < hi-p {
-			qsortIdx(data, lo, p-1, less)
-			lo = p + 1
+		if lt-lo < hi-gt {
+			qsortIdx(data, lo, lt-1, less)
+			lo = gt + 1
 		} else {
-			qsortIdx(data, p+1, hi, less)
-			hi = p - 1
+			qsortIdx(data, gt+1, hi, less)
+			hi = lt - 1
 		}
 	}
 }
 
-func partitionIdx[T any](data []T, lo, hi int, less func(i, j int) bool) int {
+// partition3Idx performs 3-way partitioning with index-based less.
+// The pivot is stored at data[hi] throughout and never moved during the loop,
+// so less(i, hi) and less(hi, i) always compare against the pivot value.
+func partition3Idx[T any](data []T, lo, hi int, less func(i, j int) bool) (int, int) {
 	mid := lo + (hi-lo)/2
-	pivotIdx := medianOf3Idx(lo, mid, hi, less)
-	data[pivotIdx], data[hi] = data[hi], data[pivotIdx]
+	pivotPos := medianOf3Idx(lo, mid, hi, less)
+	data[pivotPos], data[hi] = data[hi], data[pivotPos]
 
-	i := lo
-	for j := lo; j < hi; j++ {
-		if less(j, hi) {
-			data[i], data[j] = data[j], data[i]
+	lt, i, gt := lo, lo, hi-1
+	for i <= gt {
+		if less(i, hi) { // data[i] < pivot
+			data[lt], data[i] = data[i], data[lt]
+			lt++
+			i++
+		} else if less(hi, i) { // data[i] > pivot
+			data[i], data[gt] = data[gt], data[i]
+			gt--
+		} else { // equal
 			i++
 		}
 	}
-	data[i], data[hi] = data[hi], data[i]
-	return i
+	// Move pivot from hi into the equal range
+	data[gt+1], data[hi] = data[hi], data[gt+1]
+	return lt, gt + 1
 }
 
 func medianOf3Idx(a, b, c int, less func(i, j int) bool) int {

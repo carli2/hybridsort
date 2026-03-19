@@ -62,6 +62,23 @@ func TestHybridSort_Duplicates(t *testing.T) {
 	assertSorted(t, data)
 }
 
+// Regression: 99% duplicates must not cause O(n²) with 3-way partitioning.
+func TestSlice_SkewedDuplicates(t *testing.T) {
+	n := 10000
+	data := make([]int, n)
+	for i := range data {
+		if i%100 == 99 {
+			data[i] = 1
+		} else {
+			data[i] = 0
+		}
+	}
+	orig := make([]int, n)
+	copy(orig, data)
+	Slice(data, func(i, j int) bool { return data[i] < data[j] })
+	assertSortedPermutation(t, n, orig, data)
+}
+
 func TestHybridSort_AllEqual(t *testing.T) {
 	data := make([]int, 500)
 	for i := range data {
@@ -85,6 +102,84 @@ func TestHybridSort_MixedRuns(t *testing.T) {
 	}
 	HybridSort(data, intLess)
 	assertSorted(t, data)
+}
+
+// Exhaustive correctness: every size 0..1000, random data, check sorted + no lost/dup values.
+func TestHybridSort_Exhaustive(t *testing.T) {
+	rng := rand.New(rand.NewSource(42))
+	for n := 0; n <= 1000; n++ {
+		data := make([]int, n)
+		for i := range data {
+			data[i] = rng.Intn(n + 1)
+		}
+		orig := make([]int, n)
+		copy(orig, data)
+		HybridSort(data, intLess)
+		assertSortedPermutation(t, n, orig, data)
+	}
+}
+
+func TestSlice_Exhaustive(t *testing.T) {
+	rng := rand.New(rand.NewSource(43))
+	for n := 0; n <= 1000; n++ {
+		data := make([]int, n)
+		for i := range data {
+			data[i] = rng.Intn(n + 1)
+		}
+		orig := make([]int, n)
+		copy(orig, data)
+		Slice(data, func(i, j int) bool { return data[i] < data[j] })
+		assertSortedPermutation(t, n, orig, data)
+	}
+}
+
+func TestSliceStable_Exhaustive(t *testing.T) {
+	rng := rand.New(rand.NewSource(44))
+	for n := 0; n <= 1000; n++ {
+		data := make([]int, n)
+		for i := range data {
+			data[i] = rng.Intn(n + 1)
+		}
+		orig := make([]int, n)
+		copy(orig, data)
+		SliceStable(data, func(i, j int) bool { return data[i] < data[j] })
+		assertSortedPermutation(t, n, orig, data)
+	}
+}
+
+func TestQuickSort_Exhaustive(t *testing.T) {
+	rng := rand.New(rand.NewSource(45))
+	for n := 0; n <= 1000; n++ {
+		data := make([]int, n)
+		for i := range data {
+			data[i] = rng.Intn(n + 1)
+		}
+		orig := make([]int, n)
+		copy(orig, data)
+		QuickSort(data, intLess)
+		assertSortedPermutation(t, n, orig, data)
+	}
+}
+
+// assertSortedPermutation checks that result is sorted and is a permutation of orig.
+func assertSortedPermutation(t *testing.T, n int, orig, result []int) {
+	t.Helper()
+	if len(result) != n {
+		t.Fatalf("n=%d: length changed: got %d", n, len(result))
+	}
+	for i := 1; i < n; i++ {
+		if result[i] < result[i-1] {
+			t.Fatalf("n=%d: not sorted at %d: %d > %d", n, i-1, result[i-1], result[i])
+		}
+	}
+	// Check same multiset: sort orig and compare
+	sort.Ints(orig)
+	sort.Ints(result)
+	for i := range orig {
+		if orig[i] != result[i] {
+			t.Fatalf("n=%d: value mismatch at %d after sorting both: orig=%d result=%d (lost or duplicated values)", n, i, orig[i], result[i])
+		}
+	}
 }
 
 func TestQuickSort_Random(t *testing.T) {
